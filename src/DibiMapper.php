@@ -178,12 +178,14 @@ class DibiMapper extends \UniMapper\Mapper
      * @param array   $orderBy
      * @param integer $limit
      * @param integer $offset
+     * @param array   $associations
      *
      * @return array|false
      */
-    public function findAll($resource, array $selection, array $conditions, array $orderBy, $limit = 0, $offset = 0)
+    public function findAll($resource, array $selection, array $conditions, array $orderBy, $limit = 0, $offset = 0, array $associations)
     {
-        $fluent = $this->connection->select("[" . implode("],[", $selection) . "]")->from("%n", $resource);
+        $fluent = $this->connection->select("[source].[" . implode("],[source].[", $selection) . "]")
+            ->from("%n", $resource)->as("source");
 
         if (!empty($limit)) {
             $fluent->limit("%i", $limit);
@@ -191,6 +193,17 @@ class DibiMapper extends \UniMapper\Mapper
 
         if (!empty($offset)) {
             $fluent->offset("%i", $offset);
+        }
+
+        // Associations
+        foreach ($associations as $association) {
+
+            if ($association instanceof Reflection\Entity\Property\Association\BelongsToMany) {
+                $fluent->join("%n", $association->getTargetResource())->as("target")
+                       ->on("[source].%n = [target].%n", $association->getPrimaryKey(), $association->getTargetKey() );
+            } else {
+                throw new MapperException("Unsupported association " . get_class($association) . "!");
+            }
         }
 
         $this->setConditions($fluent, $conditions);
