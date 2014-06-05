@@ -184,8 +184,8 @@ class DibiMapper extends \UniMapper\Mapper
      */
     public function findAll($resource, array $selection, array $conditions, array $orderBy, $limit = 0, $offset = 0, array $associations)
     {
-        $fluent = $this->connection->select("[source].[" . implode("],[source].[", $selection) . "]")
-            ->from("%n", $resource)->as("source");
+        $fluent = $this->connection->select("[resource].[" . implode("],[resource].[", $selection) . "]")
+            ->from("%n", $resource)->as("resource");
 
         if (!empty($limit)) {
             $fluent->limit("%i", $limit);
@@ -199,8 +199,31 @@ class DibiMapper extends \UniMapper\Mapper
         foreach ($associations as $association) {
 
             if ($association instanceof Reflection\Entity\Property\Association\BelongsToMany) {
-                $fluent->join("%n", $association->getTargetResource())->as("target")
-                       ->on("[source].%n = [target].%n", $association->getPrimaryKey(), $association->getTargetKey() );
+
+                $fluent->join("%n", $association->getTargetResource())
+                       ->on(
+                            "[resource].%n = %n.%n",
+                            $association->getPrimaryKey(),
+                            $association->getTargetResource(),
+                            $association->getTargetKey()
+                        );
+            } elseif ($association instanceof Reflection\Entity\Property\Association\HasMany) {
+
+                $fluent->join("%n", $association->getJoinResource())
+                        ->on(
+                            "[resource].%n = %n.%n",
+                            $association->getPrimaryKey(),
+                            $association->getJoinResource(),
+                            $association->getJoinOriginKey()
+                        )
+                        ->join("%n", $association->getTargetResource())
+                        ->on(
+                            "%n.%n = %n.%n",
+                            $association->getJoinResource(),
+                            $association->getJoinTargetKey(),
+                            $association->getTargetResource(),
+                            $association->getTargetPrimaryKey()
+                        );
             } else {
                 throw new MapperException("Unsupported association " . get_class($association) . "!");
             }
