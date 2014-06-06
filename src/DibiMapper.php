@@ -244,7 +244,7 @@ class DibiMapper extends \UniMapper\Mapper
         return $this->connection->select("*")
                 ->from("%n", $association->getTargetResource())
                 ->where("%n IN %l", $association->getTargetKey(), $primaryKeys)
-                ->fetchAssoc($association->getTargetKey() . "," . $association->getTargetPrimaryKey());
+                ->fetchAssoc($association->getTargetKey() . ",#");
     }
 
     private function hasMany(HasMany $association, array $primaryKeys)
