@@ -3,6 +3,8 @@
 namespace UniMapper\Mapper;
 
 use UniMapper\Exceptions\MapperException,
+    UniMapper\Reflection\Entity\Property\Association\BelongsToMany,
+    UniMapper\Reflection\Entity\Property\Association\HasMany,
     UniMapper\Reflection;
 
 /**
@@ -184,8 +186,7 @@ class DibiMapper extends \UniMapper\Mapper
      */
     public function findAll($resource, array $selection, array $conditions, array $orderBy, $limit = 0, $offset = 0, array $associations)
     {
-        $fluent = $this->connection->select("[resource].[" . implode("],[resource].[", $selection) . "]")
-            ->from("%n", $resource)->as("resource");
+        $fluent = $this->connection->select("[" . implode("],[", $selection) . "]")->from("%n", $resource);
 
         if (!empty($limit)) {
             $fluent->limit("%i", $limit);
@@ -193,40 +194,6 @@ class DibiMapper extends \UniMapper\Mapper
 
         if (!empty($offset)) {
             $fluent->offset("%i", $offset);
-        }
-
-        // Associations
-        foreach ($associations as $association) {
-
-            if ($association instanceof Reflection\Entity\Property\Association\BelongsToMany) {
-
-                $fluent->join("%n", $association->getTargetResource())
-                       ->on(
-                            "[resource].%n = %n.%n",
-                            $association->getPrimaryKey(),
-                            $association->getTargetResource(),
-                            $association->getTargetKey()
-                        );
-            } elseif ($association instanceof Reflection\Entity\Property\Association\HasMany) {
-
-                $fluent->join("%n", $association->getJoinResource())
-                        ->on(
-                            "[resource].%n = %n.%n",
-                            $association->getPrimaryKey(),
-                            $association->getJoinResource(),
-                            $association->getJoinOriginKey()
-                        )
-                        ->join("%n", $association->getTargetResource())
-                        ->on(
-                            "%n.%n = %n.%n",
-                            $association->getJoinResource(),
-                            $association->getJoinTargetKey(),
-                            $association->getTargetResource(),
-                            $association->getTargetPrimaryKey()
-                        );
-            } else {
-                throw new MapperException("Unsupported association " . get_class($association) . "!");
-            }
         }
 
         $this->setConditions($fluent, $conditions);
@@ -239,6 +206,67 @@ class DibiMapper extends \UniMapper\Mapper
         if (count($result) === 0) {
             return false;
         }
+
+        // Associations
+        $associated = [];
+        foreach ($associations as $propertyName => $association) {
+
+            $primaryKeys = [];
+            foreach ($result as $row) {
+                $primaryKeys[] = $row->{$association->getPrimaryKey()};
+            }
+
+            if ($association instanceof BelongsToMany) {
+                $associated[$propertyName] = $this->belongsToMany($association, $primaryKeys);
+            } elseif ($association instanceof HasMany) {
+                $associated[$propertyName] = $this->hasMany($association, $primaryKeys);
+            } else {
+                throw new MapperException("Unsupported association " . get_class($association) . "!");
+            }
+        }
+
+        foreach ($result as $index => $item) {
+
+            foreach ($associated as $propertyName => $associatedResult) {
+
+                $primaryValue = $item->{$association->getPrimaryKey()};
+                if (isset($associatedResult[$primaryValue])) {
+                    $item[$propertyName] = $associatedResult[$primaryValue];
+                }
+            }
+        }
+
+        return $result;
+    }
+
+    private function belongsToMany(BelongsToMany $association, array $primaryKeys)
+    {
+        return $this->connection->select("*")
+                ->from("%n", $association->getTargetResource())
+                ->where("%n IN %l", $association->getTargetKey(), $primaryKeys)
+                ->fetchAssoc($association->getTargetKey() . "," . $association->getTargetPrimaryKey());
+    }
+
+    private function hasMany(HasMany $association, array $primaryKeys)
+    {
+        $joinResult = $this->connection->select("%n,%n", $association->getJoinOriginKey(), $association->getJoinTargetKey())
+            ->from("%n", $association->getJoinResource())
+            ->where("%n IN %l", $association->getJoinOriginKey(), $primaryKeys)
+            ->fetchAssoc($association->getJoinTargetKey() . "," . $association->getJoinOriginKey());
+
+        $targetResult = $this->connection->select("*")
+            ->from("%n", $association->getTargetResource())
+            ->where("%n IN %l", $association->getTargetPrimaryKey(), array_keys($joinResult))
+            ->fetchAssoc($association->getTargetPrimaryKey());
+
+        $result = [];
+        foreach ($joinResult as $targetKey => $join) {
+
+            foreach ($join as $originKey => $data) {
+                $result[$originKey][] = $targetResult[$targetKey];
+            }
+        }
+
         return $result;
     }
 
