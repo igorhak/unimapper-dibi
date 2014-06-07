@@ -184,7 +184,7 @@ class DibiMapper extends \UniMapper\Mapper
      *
      * @return array|false
      */
-    public function findAll($resource, array $selection, array $conditions, array $orderBy, $limit = 0, $offset = 0, array $associations)
+    public function findAll($resource, array $selection = [], array $conditions = [], array $orderBy = [], $limit = 0, $offset = 0, array $associations = [])
     {
         $fluent = $this->connection->select("[" . implode("],[", $selection) . "]")->from("%n", $resource);
 
@@ -229,7 +229,7 @@ class DibiMapper extends \UniMapper\Mapper
 
             foreach ($associated as $propertyName => $associatedResult) {
 
-                $primaryValue = $item->{$association->getPrimaryKey()};
+                $primaryValue = $item->{$association->getPrimaryKey()}; // potencial future bug, association wrong?
                 if (isset($associatedResult[$primaryValue])) {
                     $item[$propertyName] = $associatedResult[$primaryValue];
                 }
