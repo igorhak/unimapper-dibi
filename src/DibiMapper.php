@@ -243,21 +243,21 @@ class DibiMapper extends \UniMapper\Mapper
     {
         return $this->connection->select("*")
                 ->from("%n", $association->getTargetResource())
-                ->where("%n IN %l", $association->getTargetKey(), $primaryKeys)
-                ->fetchAssoc($association->getTargetKey() . ",#");
+                ->where("%n IN %l", $association->getForeignKey(), $primaryKeys)
+                ->fetchAssoc($association->getForeignKey() . ",#");
     }
 
     private function hasMany(HasMany $association, array $primaryKeys)
     {
-        $joinResult = $this->connection->select("%n,%n", $association->getJoinOriginKey(), $association->getJoinTargetKey())
+        $joinResult = $this->connection->select("%n,%n", $association->getJoinKey(), $association->getReferenceKey())
             ->from("%n", $association->getJoinResource())
-            ->where("%n IN %l", $association->getJoinOriginKey(), $primaryKeys)
-            ->fetchAssoc($association->getJoinTargetKey() . "," . $association->getJoinOriginKey());
+            ->where("%n IN %l", $association->getJoinKey(), $primaryKeys)
+            ->fetchAssoc($association->getReferenceKey() . "," . $association->getJoinKey());
 
         $targetResult = $this->connection->select("*")
             ->from("%n", $association->getTargetResource())
-            ->where("%n IN %l", $association->getTargetPrimaryKey(), array_keys($joinResult))
-            ->fetchAssoc($association->getTargetPrimaryKey());
+            ->where("%n IN %l", $association->getForeignKey(), array_keys($joinResult))
+            ->fetchAssoc($association->getForeignKey());
 
         $result = [];
         foreach ($joinResult as $targetKey => $join) {
